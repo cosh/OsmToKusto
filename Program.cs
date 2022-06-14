@@ -19,10 +19,7 @@ using Microsoft.Extensions.Logging;
 
 Settings settings = GetSettings();
 
-settings.DryRun = false;
-
-var ways = new List<OsmGeo>();
-var relations = new List<OsmGeo>();
+settings.DryRun = true;
 
 var loggerFactory = LoggerFactory.Create(builder =>
 {
@@ -76,7 +73,7 @@ using (var kustoClient = KustoClientFactory.CreateCslAdminProvider(commandAndQue
     kustoClient.ExecuteControlCommand(settings.Kusto.DatabaseName, command);
 
     command =
-        CslCommandGenerator.GenerateTableMappingCreateOrAlterCommand (
+        CslCommandGenerator.GenerateTableMappingCreateOrAlterCommand(
             IngestionMappingKind.Csv,
             settings.Kusto.RawOSMTableName,
             settings.Kusto.RawOSMTableNameMappingName,
@@ -97,15 +94,14 @@ using (var kustoClient = KustoClientFactory.CreateCslAdminProvider(commandAndQue
     kustoClient.ExecuteControlCommand(settings.Kusto.DatabaseName, command);
 }
 
+long count = 0;
+int ingestions = 0;
+StringBuilder sb = new StringBuilder();
+
 using (var fileStream = File.OpenRead(settings.PbfFilePath))
 {
     // create source stream.
     var source = new PBFOsmStreamSource(fileStream);
-
-    StringBuilder sb = new StringBuilder();
-
-    long count = 0;
-    int ingestions = 0;
 
     foreach (var aOSMItem in source)
     {
@@ -127,7 +123,7 @@ using (var fileStream = File.OpenRead(settings.PbfFilePath))
                 var node = aOSMItem as Node;
                 if (node != null)
                 {
-                    latitude = node.Latitude.HasValue ? node.Latitude.Value.ToString("G", CultureInfo.InvariantCulture) : String.Empty; 
+                    latitude = node.Latitude.HasValue ? node.Latitude.Value.ToString("G", CultureInfo.InvariantCulture) : String.Empty;
                     longitude = node.Longitude.HasValue ? node.Longitude.Value.ToString("G", CultureInfo.InvariantCulture) : String.Empty;
                 }
                 break;
@@ -138,7 +134,7 @@ using (var fileStream = File.OpenRead(settings.PbfFilePath))
                 {
                     nodesOrMember = GetNodesArray(way.Nodes);
                 }
-                break ;
+                break;
 
             case OsmGeoType.Relation:
                 var relation = aOSMItem as Relation;
@@ -154,9 +150,9 @@ using (var fileStream = File.OpenRead(settings.PbfFilePath))
 
         if (((count % settings.NumberOfRecordsPerFile == 0) && count > 0) || sb.Length > 1000000000)
         {
-             logger.LogInformation($"About to ingest {settings.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}. Queue count: {iManager.GetQueueCount()}");
+            logger.LogInformation($"About to ingest {settings.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}. Queue count: {iManager.GetQueueCount()}");
 
-            IngestToKusto(ingestConnectionStringBuilder, settings.Kusto.DatabaseName, settings.Kusto.RawOSMTableName, sb, 
+            IngestToKusto(ingestConnectionStringBuilder, settings.Kusto.DatabaseName, settings.Kusto.RawOSMTableName, sb,
                 settings.Kusto.RawOSMTableNameMappingName, logger, settings, iManager);
 
             ingestions++;
@@ -180,27 +176,25 @@ using (var fileStream = File.OpenRead(settings.PbfFilePath))
 
         count++;
     }
+}
 
-    logger.LogInformation($"About to ingest the last batch. Current row count: {count}");
-    IngestToKusto(ingestConnectionStringBuilder, settings.Kusto.DatabaseName, settings.Kusto.RawOSMTableName, sb, 
+logger.LogInformation($"About to ingest the last batch. Current row count: {count}");
+IngestToKusto(ingestConnectionStringBuilder, settings.Kusto.DatabaseName, settings.Kusto.RawOSMTableName, sb,
         settings.Kusto.RawOSMTableNameMappingName, logger, settings, iManager);
 
-    logger.LogInformation("DONE ingesting OSM geos");
+logger.LogInformation("DONE ingesting OSM geos");
 
-    logger.LogInformation("Creating features for ways");
-    var features = ways.ToFeatureSource();
+while (iManager.GetQueueCount() > 0)
+{
+    logger.LogInformation($"Ingestion queue count: {iManager.GetQueueCount()}");
 
-    while(iManager.GetQueueCount() > 0)
-    {
-        logger.LogInformation($"Ingestion queue count: {iManager.GetQueueCount()}");
-
-        Thread.Sleep(10000);
-    }
-
-    logger.LogInformation("Finished all ingestions");
-
-    Console.ReadLine();
+    Thread.Sleep(10000);
 }
+
+logger.LogInformation("Finished all ingestions");
+
+Console.ReadLine();
+
 
 string CleanString(string osmId, char csvSeparater)
 {
@@ -229,7 +223,7 @@ string GetNodesArray(long[] nodes)
 
 string CreateTagString(TagsCollectionBase tags)
 {
-    if(tags != null && tags.Count > 0)
+    if (tags != null && tags.Count > 0)
     {
         return "[" + String.Join(',', tags.Select(aTag => $"[\"{aTag.Key}\", \"{aTag.Value}\"]")) + "]";
     }
@@ -237,7 +231,7 @@ string CreateTagString(TagsCollectionBase tags)
     return String.Empty;
 }
 
-static void IngestToKusto(KustoConnectionStringBuilder ingestConnectionStringBuilder, string databaseName, string table, 
+static void IngestToKusto(KustoConnectionStringBuilder ingestConnectionStringBuilder, string databaseName, string table,
     StringBuilder sb, String mappingName, ILogger logger, Settings settings, IngestionManager iManager)
 {
     var job = new IngestionJob();
