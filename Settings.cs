@@ -14,6 +14,8 @@ namespace OsmToKusto
 
         public int NumberOfRecordsPerFile { get; set; } = 750000;
 
+        public bool DryRun { get; set; } = false;
+
         public SettingsKusto Kusto { get; set; }
     }
 }

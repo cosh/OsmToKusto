@@ -19,7 +19,12 @@ using Microsoft.Extensions.Logging;
 
 Settings settings = GetSettings();
 
-using var loggerFactory = LoggerFactory.Create(builder =>
+settings.DryRun = false;
+
+var ways = new List<OsmGeo>();
+var relations = new List<OsmGeo>();
+
+var loggerFactory = LoggerFactory.Create(builder =>
 {
     builder
         .AddFilter("Microsoft", LogLevel.Warning)
@@ -44,6 +49,9 @@ var ingestConnectionStringBuilder = new KustoConnectionStringBuilder(ingestUri).
 
 var commandAndQueryURL = $"https://{settings.Kusto.ClusterName}.{settings.Kusto.ClusterRegion}.kusto.windows.net";
 var commandAndQueryConnectionStringBuilder = new KustoConnectionStringBuilder(commandAndQueryURL).WithAadUserPromptAuthentication(userId: settings.Kusto.UserId);
+
+var ingestClient = KustoIngestFactory.CreateQueuedIngestClient(ingestConnectionStringBuilder);
+IngestionManager iManager = new IngestionManager(ingestClient, settings, loggerFactory);
 
 using (var kustoClient = KustoClientFactory.CreateCslAdminProvider(commandAndQueryConnectionStringBuilder))
 {
@@ -146,9 +154,10 @@ using (var fileStream = File.OpenRead(settings.PbfFilePath))
 
         if (((count % settings.NumberOfRecordsPerFile == 0) && count > 0) || sb.Length > 1000000000)
         {
-             logger.LogInformation($"About to ingest {settings.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}.");
+             logger.LogInformation($"About to ingest {settings.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}. Queue count: {iManager.GetQueueCount()}");
 
-            IngestToKusto(ingestConnectionStringBuilder, settings.Kusto.DatabaseName, settings.Kusto.RawOSMTableName, sb, settings.Kusto.RawOSMTableNameMappingName, logger, settings.Kusto);
+            IngestToKusto(ingestConnectionStringBuilder, settings.Kusto.DatabaseName, settings.Kusto.RawOSMTableName, sb, 
+                settings.Kusto.RawOSMTableNameMappingName, logger, settings, iManager);
 
             ingestions++;
 
@@ -173,9 +182,22 @@ using (var fileStream = File.OpenRead(settings.PbfFilePath))
     }
 
     logger.LogInformation($"About to ingest the last batch. Current row count: {count}");
-    IngestToKusto(ingestConnectionStringBuilder, settings.Kusto.DatabaseName, settings.Kusto.RawOSMTableName, sb, settings.Kusto.RawOSMTableNameMappingName, logger, settings.Kusto);
+    IngestToKusto(ingestConnectionStringBuilder, settings.Kusto.DatabaseName, settings.Kusto.RawOSMTableName, sb, 
+        settings.Kusto.RawOSMTableNameMappingName, logger, settings, iManager);
 
-    logger.LogInformation("DONE");
+    logger.LogInformation("DONE ingesting OSM geos");
+
+    logger.LogInformation("Creating features for ways");
+    var features = ways.ToFeatureSource();
+
+    while(iManager.GetQueueCount() > 0)
+    {
+        logger.LogInformation($"Ingestion queue count: {iManager.GetQueueCount()}");
+
+        Thread.Sleep(10000);
+    }
+
+    logger.LogInformation("Finished all ingestions");
 
     Console.ReadLine();
 }
@@ -216,42 +238,17 @@ string CreateTagString(TagsCollectionBase tags)
 }
 
 static void IngestToKusto(KustoConnectionStringBuilder ingestConnectionStringBuilder, string databaseName, string table, 
-    StringBuilder sb, String mappingName, ILogger logger, SettingsKusto settings)
+    StringBuilder sb, String mappingName, ILogger logger, Settings settings, IngestionManager iManager)
 {
-    int retries = 0;
+    var job = new IngestionJob();
+    job.Table = table;
+    job.MappingName = mappingName;
+    job.DatabaseName = databaseName;
 
-    while (retries < settings.MaxRetries)
-    {
-        try
-        {
-            using (var ingestClient = KustoIngestFactory.CreateQueuedIngestClient(ingestConnectionStringBuilder))
-            {
-                IngestionMapping ingestionMapping = new IngestionMapping();
-                ingestionMapping.IngestionMappingReference = mappingName;
+    var myByteArray = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    job.Stream = new MemoryStream(myByteArray);
 
-                var properties =
-                    new KustoQueuedIngestionProperties(databaseName, table)
-                    {
-                        Format = DataSourceFormat.psv,
-                        IgnoreFirstRecord = false,
-                        IngestionMapping = ingestionMapping
-                    };
-
-                var myByteArray = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
-                var ms = new MemoryStream(myByteArray);
-                ingestClient.IngestFromStreamAsync(ms, ingestionProperties: properties).GetAwaiter().GetResult();
-                logger.LogInformation($"Ingested a batch");
-
-                break;
-            }
-        }
-        catch (Exception e)
-        {
-            logger.LogError($"Error during ingestion (retry {retries}). Message: {e.Message}");
-            retries++;
-            Thread.Sleep(settings.MsBetweenRetries);
-        }
-    }
+    iManager.Enqueue(job);
 }
 
 Settings GetSettings()
