@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace OsmToKusto
 {
 
-    internal class IngestionManager
+    public class IngestionManager
     {
         private readonly ConcurrentQueue<Task> _ingestionTasks = new ConcurrentQueue<Task>();
         private readonly IKustoQueuedIngestClient _ingestClient;

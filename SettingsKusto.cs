@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace OsmToKusto
 {
-    internal class SettingsKusto
+    public class SettingsKusto
     {
         public string UserId { get; set; }
         public string ClusterName { get; set; }

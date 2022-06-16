@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace OsmToKusto
 {
-    internal class Settings
+    public class Settings
     {
         public string APPINSIGHTS_INSTRUMENTATIONKEY { get; set; } = "";
 
