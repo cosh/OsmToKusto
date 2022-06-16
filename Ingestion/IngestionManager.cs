@@ -8,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OsmToKusto
+namespace OsmToKusto.Ingestion
 {
 
     public class IngestionManager
@@ -17,6 +17,7 @@ namespace OsmToKusto
         private readonly IKustoQueuedIngestClient _ingestClient;
         private readonly Settings _settings;
         private readonly ILogger _logger;
+        private int _ongoingIngestions = 0;
 
         public IngestionManager(IKustoQueuedIngestClient ingestClient, Settings settings, ILoggerFactory loggerFactory)
         {
@@ -32,8 +33,10 @@ namespace OsmToKusto
                     Task ingestionTask;
                     while (_ingestionTasks.TryDequeue(out ingestionTask))
                     {
+                        Interlocked.Increment(ref _ongoingIngestions);
                         ingestionTask.Start();
                         ingestionTask.Wait();
+                        Interlocked.Decrement(ref _ongoingIngestions);
                     }
 
                     Thread.Sleep(1);
@@ -46,6 +49,11 @@ namespace OsmToKusto
             Task.Run(action);
         }
 
+        public int GetOngoingIngestions()
+        {
+            return _ongoingIngestions;
+        }
+        
         public void Enqueue(IngestionJob job)
         {
             var task = new Task(Ingest, job);
@@ -58,7 +66,7 @@ namespace OsmToKusto
             return _ingestionTasks.Count;
         }
 
-        private void Ingest(Object jobObj)
+        private void Ingest(object jobObj)
         {
             IngestionJob job = (IngestionJob)jobObj;
 
@@ -85,12 +93,17 @@ namespace OsmToKusto
                             IngestionMapping = ingestionMapping
                         };
 
-                    var ms = job.Stream;
-
-                    _ingestClient.IngestFromStreamAsync(ms, ingestionProperties: properties).GetAwaiter().GetResult();
+                    _ingestClient.IngestFromStorage(job.ToBeIngested, ingestionProperties: properties);
                     _logger.LogInformation($"Ingested a batch");
 
-                    break;
+                    Thread.Sleep(100);
+
+                    File.Delete(job.ToBeIngested);
+                    _logger.LogDebug($"Deleted file {job.ToBeIngested} because of successful ingestion");
+
+                    Thread.Sleep(1000);
+
+                    return;
                 }
                 catch (Exception e)
                 {
@@ -99,6 +112,9 @@ namespace OsmToKusto
                     Thread.Sleep(_settings.Kusto.MsBetweenRetries);
                 }
             }
+
+            _logger.LogError($"Abandoning the ingestion because of too many retries (retry {retries}).");
+            File.Delete(job.ToBeIngested);
         }
     }
 }

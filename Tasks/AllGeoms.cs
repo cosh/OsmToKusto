@@ -3,6 +3,7 @@ using Kusto.Data.Ingestion;
 using Microsoft.Extensions.Logging;
 using OsmSharp;
 using OsmSharp.Streams;
+using OsmToKusto.Ingestion;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -124,7 +125,7 @@ namespace OsmToKusto.Tasks
 
                     if (((count % job.Config.NumberOfRecordsPerFile == 0) && count > 0) || sb.Length > 1000000000)
                     {
-                        _logger.LogInformation($"About to ingest {job.Config.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}. Queue count: {_iManager.GetQueueCount()}");
+                        _logger.LogInformation($"About to ingest {job.Config.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}. Queue count: {_iManager.GetQueueCount()}. Concurrent ingestions: {_iManager.GetOngoingIngestions()}");
 
                         Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawOSMTableName, sb,
                             job.Config.Kusto.RawOSMTableNameMappingName, _iManager);

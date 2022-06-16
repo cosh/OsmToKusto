@@ -17,10 +17,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.Logging;
 using OsmToKusto.Tasks;
+using OsmToKusto.Ingestion;
 
 Settings settings = GetSettings();
 
-settings.DryRun = true;
+settings.DryRun = false;
 
 var loggerFactory = LoggerFactory.Create(builder =>
 {
@@ -65,14 +66,14 @@ tasks.Add(allGeosTask);
 
 Task.WaitAll(tasks.ToArray());
 
-while (iManager.GetQueueCount() > 0)
+while (iManager.GetQueueCount() > 0 || iManager.GetOngoingIngestions() > 0)
 {
-    logger.LogInformation($"Ingestion queue count: {iManager.GetQueueCount()}");
+    logger.LogInformation($"Ingestion queue count: {iManager.GetQueueCount()}, Ongoing ingestions : {iManager.GetOngoingIngestions()}");
 
     Thread.Sleep(10000);
 }
 
-logger.LogInformation("Finished all ingestions");
+logger.LogInformation("Finished all ingestions, press ENTER to stop the program.");
 
 Console.ReadLine();
 

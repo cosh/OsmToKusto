@@ -1,5 +1,6 @@
 ﻿using OsmSharp;
 using OsmSharp.Tags;
+using OsmToKusto.Ingestion;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -56,8 +57,10 @@ namespace OsmToKusto
             job.MappingName = mappingName;
             job.DatabaseName = databaseName;
 
-            var myByteArray = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
-            job.Stream = new MemoryStream(myByteArray);
+            string tempFile = Path.GetRandomFileName();
+            File.WriteAllText(tempFile, sb.ToString());
+
+            job.ToBeIngested = tempFile;
 
             iManager.Enqueue(job);
         }
