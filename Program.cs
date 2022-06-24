@@ -18,10 +18,9 @@ using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.Logging;
 using OsmToKusto.Tasks;
 using OsmToKusto.Ingestion;
+using System.IO.MemoryMappedFiles;
 
 Settings settings = GetSettings();
-
-settings.DryRun = false;
 
 var loggerFactory = LoggerFactory.Create(builder =>
 {
@@ -29,7 +28,12 @@ var loggerFactory = LoggerFactory.Create(builder =>
         .AddFilter("Microsoft", LogLevel.Warning)
         .AddFilter("System", LogLevel.Warning)
         .AddFilter("OsmToKusto", LogLevel.Debug)
-        .AddConsole();
+        .AddSimpleConsole(options =>
+        {
+            options.IncludeScopes = true;
+            options.SingleLine = true;
+            options.TimestampFormat = "hh:mm:ss ";
+        });
 
     if (!String.IsNullOrWhiteSpace(settings.APPINSIGHTS_INSTRUMENTATIONKEY))
     {
@@ -52,17 +56,13 @@ IngestionManager iManager = new IngestionManager(ingestClient, settings, loggerF
 
 var tasks = new List<Task>();
 
-OSMJob job = new OSMJob() { CommandClient = kustoClient, IngestClient= ingestClient, Config = settings };
-AllGeoms allGeoms = new AllGeoms(loggerFactory, iManager);
+OSMJob job = new OSMJob() { CommandClient = kustoClient, IngestClient = ingestClient, Config = settings};
 
-Action allGeomsAction = () =>
-{
-    allGeoms.IngestAllGeos(job);
-};
-
-var allGeosTask = Task.Run(allGeomsAction);
-
+Task allGeosTask = CreateAllGeosTask(loggerFactory, iManager, job);
 tasks.Add(allGeosTask);
+
+Task waysTask = CreateWaysTask(loggerFactory, iManager, job);
+tasks.Add(waysTask);
 
 Task.WaitAll(tasks.ToArray());
 
@@ -99,4 +99,30 @@ Settings GetSettings()
 
     Settings settings = config.GetRequiredSection("Settings").Get<Settings>();
     return settings;
+}
+
+static Task CreateAllGeosTask(ILoggerFactory loggerFactory, IngestionManager iManager, OSMJob job)
+{
+    AllGeoms allGeoms = new AllGeoms(loggerFactory, iManager);
+
+    Action allGeomsAction = () =>
+    {
+        allGeoms.IngestAllGeos(job);
+    };
+
+    var allGeosTask = Task.Run(allGeomsAction);
+    return allGeosTask;
+}
+
+static Task CreateWaysTask(ILoggerFactory loggerFactory, IngestionManager iManager, OSMJob job)
+{
+    Ways ways = new Ways(loggerFactory, iManager);
+
+    Action waysAction = () =>
+    {
+        ways.IngestAllWays(job);
+    };
+
+    var waysTask = Task.Run(waysAction);
+    return waysTask;
 }

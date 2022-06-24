@@ -14,6 +14,12 @@ namespace OsmToKusto
 
         public int NumberOfRecordsPerFile { get; set; } = 750000;
 
+        public int ComplexGeoBatchSize { get; set; } = 130000;
+
+        public int ComplexGeoTask { get; set; } = 10;
+
+        public string TempDirectory { get; set; }
+
         public bool DryRun { get; set; } = false;
 
         public SettingsKusto Kusto { get; set; }

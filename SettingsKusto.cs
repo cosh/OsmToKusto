@@ -15,11 +15,13 @@ namespace OsmToKusto
 
         public string DatabaseName { get; set; } = "osm";
 
-        public string RawOSMTableName { get; set; } = "rawosm";
+        public string RawAllGeometriesTable { get; set; } = "rawAllGeometries";
 
-        public string RawOSMTableNameMappingName { get; set; } = "map";
+        public string RawGeometriesMappingName { get; set; } = "map";
 
         public int MaxRetries { get; set; } = 10;
         public int MsBetweenRetries { get; set; } = 300000;
+        public string RawWaysTable { get; set; } = "rawWays";
+        public string RawWaysMappingName { get; set; } = "map";
     }
 }

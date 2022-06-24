@@ -30,7 +30,7 @@ namespace OsmToKusto.Tasks
 
             var command =
             CslCommandGenerator.GenerateTableCreateCommand(
-                job.Config.Kusto.RawOSMTableName,
+                job.Config.Kusto.RawAllGeometriesTable,
                 new[]
                 {
             Tuple.Create("osmId", "System.Int64"),
@@ -51,8 +51,8 @@ namespace OsmToKusto.Tasks
             command =
                 CslCommandGenerator.GenerateTableMappingCreateOrAlterCommand(
                     IngestionMappingKind.Csv,
-                    job.Config.Kusto.RawOSMTableName,
-                    job.Config.Kusto.RawOSMTableNameMappingName,
+                    job.Config.Kusto.RawAllGeometriesTable,
+                    job.Config.Kusto.RawGeometriesMappingName,
                     new[] {
             new ColumnMapping() { ColumnName = "osmId", Properties = new Dictionary<string, string>() { { MappingConsts.Ordinal, "0" } } },
             new ColumnMapping() { ColumnName = "ts", Properties =  new Dictionary<string, string>() { { MappingConsts.Ordinal, "1" } } },
@@ -127,8 +127,8 @@ namespace OsmToKusto.Tasks
                     {
                         _logger.LogInformation($"About to ingest {job.Config.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}. Queue count: {_iManager.GetQueueCount()}. Concurrent ingestions: {_iManager.GetOngoingIngestions()}");
 
-                        Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawOSMTableName, sb,
-                            job.Config.Kusto.RawOSMTableNameMappingName, _iManager);
+                        Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawAllGeometriesTable, sb,
+                            job.Config.Kusto.RawGeometriesMappingName, _iManager);
 
                         ingestions++;
 
@@ -154,8 +154,8 @@ namespace OsmToKusto.Tasks
             }
 
             _logger.LogInformation($"About to ingest the last batch. Current row count: {count}");
-            Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawOSMTableName, sb,
-                    job.Config.Kusto.RawOSMTableNameMappingName, _iManager);
+            Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawAllGeometriesTable, sb,
+                    job.Config.Kusto.RawGeometriesMappingName, _iManager);
 
             _logger.LogInformation("DONE ingesting OSM geos");
         }
