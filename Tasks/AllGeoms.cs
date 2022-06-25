@@ -125,7 +125,7 @@ namespace OsmToKusto.Tasks
 
                 foreach (var aOSMItem in source)
                 {
-                    String geoType = aOSMItem.Type.ToString();
+                    String geoType = "";
                     String ts = aOSMItem.TimeStamp.HasValue ? aOSMItem.TimeStamp.Value.ToString("yyyy-MM-dd HH:mm:ss.fff") : String.Empty;
                     String tags = Helper.CreateTagString(aOSMItem.Tags);
                     String userId = aOSMItem.UserId.HasValue ? aOSMItem.UserId.Value.ToString() : String.Empty;
@@ -143,6 +143,7 @@ namespace OsmToKusto.Tasks
                             var node = aOSMItem as Node;
                             if (node != null)
                             {
+                                geoType = "Node";
                                 latitude = node.Latitude.HasValue ? Helper.CreateStringFromLong(node.Latitude.Value) : string.Empty;
                                 longitude = node.Longitude.HasValue ? Helper.CreateStringFromLong(node.Longitude.Value) : String.Empty;
                             }
@@ -152,6 +153,7 @@ namespace OsmToKusto.Tasks
                             var way = aOSMItem as Way;
                             if (way != null)
                             {
+                                geoType = "Way";
                                 nodesOrMember = Helper.GetNodesArray(way.Nodes);
                             }
                             break;
@@ -160,6 +162,7 @@ namespace OsmToKusto.Tasks
                             var relation = aOSMItem as Relation;
                             if (relation != null)
                             {
+                                geoType = "Relation";
                                 nodesOrMember = Helper.GetMembersArray(relation.Members);
                             }
                             break;
