@@ -45,7 +45,6 @@ namespace OsmToKusto.Tasks
             Tuple.Create("nodesOrMember", "System.Object"),
             Tuple.Create("pbf", "System.String")
                 });
-
             job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
 
             command =
@@ -66,7 +65,53 @@ namespace OsmToKusto.Tasks
             new ColumnMapping() { ColumnName = "nodesOrMember", Properties =  new Dictionary<string, string>() { { MappingConsts.Ordinal, "9" } } },
             new ColumnMapping() { ColumnName = "pbf", Properties =  new Dictionary<string, string>() { { MappingConsts.Ordinal, "10" } } }
                 });
+            job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
 
+            command = ".create-or-alter function with (folder = \"Update\", skipvalidation = \"true\") Update_RawGeometries() {" +
+                @$"{job.Config.Kusto.RawAllGeometriesTable}
+                | where isnotempty( latitude) and isnotempty( longitude)
+                | extend
+                  h3_low = geo_point_to_h3cell(longitude, latitude, 2), //158 km
+                  h3_mid = geo_point_to_h3cell(longitude, latitude, 5), //8 km
+                  h3_high = geo_point_to_h3cell(longitude, latitude, 9), //174 m
+                  s2_low = geo_point_to_s2cell(longitude, latitude, 6), //108 km	- 156 km
+                  s2_mid = geo_point_to_s2cell(longitude, latitude, 10), //7 km - 10 km
+                  s2_high = geo_point_to_s2cell(longitude, latitude, 16), //106 m - 153 m
+                  geohash_low = geo_point_to_geohash(longitude, latitude, 3), //108 km	- 156 km
+                  geohash_mid = geo_point_to_geohash(longitude, latitude, 5), //7 km - 10 km
+                  geohash_high = geo_point_to_geohash(longitude, latitude, 7) //106 m - 153 m" +
+                "\n}";
+            job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
+
+            command =
+            CslCommandGenerator.GenerateTableCreateCommand(
+                job.Config.Kusto.AllGeometriesTable,
+                new[]
+                {
+            Tuple.Create("osmId", "System.Int64"),
+            Tuple.Create("ts", "System.DateTime"),
+            Tuple.Create("osmTags", "System.Object"),
+            Tuple.Create("userId", "System.Int64"),
+            Tuple.Create("userName", "System.String"),
+            Tuple.Create("osmVersion", "System.Int32"),
+            Tuple.Create("geoType", "System.String"),
+            Tuple.Create("latitude", "System.Double"),
+            Tuple.Create("longitude", "System.Double"),
+            Tuple.Create("nodesOrMember", "System.Object"),
+            Tuple.Create("pbf", "System.String"),
+            Tuple.Create("h3_low", "System.String"),
+            Tuple.Create("h3_mid", "System.String"),
+            Tuple.Create("h3_high", "System.String"),
+            Tuple.Create("s2_low", "System.String"),
+            Tuple.Create("s2_mid", "System.String"),
+            Tuple.Create("s2_high", "System.String"),
+            Tuple.Create("geohash_low", "System.String"),
+            Tuple.Create("geohash_mid", "System.String"),
+            Tuple.Create("geohash_high", "System.String")
+                });
+            job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
+
+            command = $".alter table {job.Config.Kusto.AllGeometriesTable} policy update @'[" + "{" + $"\"IsEnabled\": true, \"Source\": \"{job.Config.Kusto.RawAllGeometriesTable}\", \"Query\": \"Update_RawGeometries\", \"IsTransactional\": true, \"PropagateIngestionProperties\": false" + "}]'";
             job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
 
             long count = 0;
@@ -98,8 +143,8 @@ namespace OsmToKusto.Tasks
                             var node = aOSMItem as Node;
                             if (node != null)
                             {
-                                latitude = node.Latitude.HasValue ? node.Latitude.Value.ToString("G", CultureInfo.InvariantCulture) : String.Empty;
-                                longitude = node.Longitude.HasValue ? node.Longitude.Value.ToString("G", CultureInfo.InvariantCulture) : String.Empty;
+                                latitude = node.Latitude.HasValue ? Helper.CreateStringFromLong(node.Latitude.Value) : string.Empty;
+                                longitude = node.Longitude.HasValue ? Helper.CreateStringFromLong(node.Longitude.Value) : String.Empty;
                             }
                             break;
 
@@ -159,6 +204,5 @@ namespace OsmToKusto.Tasks
 
             _logger.LogInformation("DONE ingesting OSM geos");
         }
-
     }
 }

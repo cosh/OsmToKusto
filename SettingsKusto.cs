@@ -23,5 +23,11 @@ namespace OsmToKusto
         public int MsBetweenRetries { get; set; } = 300000;
         public string RawWaysTable { get; set; } = "rawWays";
         public string RawWaysMappingName { get; set; } = "map";
+        public string WaysTable { get; set; } = "ways";
+        public string AllGeometriesTable { get; set; } = "allGeometries";
+
+
+
+
     }
 }

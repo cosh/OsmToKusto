@@ -3,6 +3,7 @@ using OsmSharp.Tags;
 using OsmToKusto.Ingestion;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -63,6 +64,11 @@ namespace OsmToKusto
             job.ToBeIngested = tempFile;
 
             iManager.Enqueue(job);
+        }
+
+        public static string CreateStringFromLong(Double doubleValue)
+        {
+            return doubleValue.ToString("G", CultureInfo.InvariantCulture);
         }
     }
 }

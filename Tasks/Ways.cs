@@ -49,7 +49,6 @@ namespace OsmToKusto.Tasks
             Tuple.Create("nodesOrMember", "System.Object"),
             Tuple.Create("pbf", "System.String")
                 });
-
             job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
 
             command =
@@ -69,9 +68,66 @@ namespace OsmToKusto.Tasks
             new ColumnMapping() { ColumnName = "nodesOrMember", Properties =  new Dictionary<string, string>() { { MappingConsts.Ordinal, "8" } } },
             new ColumnMapping() { ColumnName = "pbf", Properties =  new Dictionary<string, string>() { { MappingConsts.Ordinal, "9" } } }
                 });
-
             job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
 
+            command = ".create-or-alter function with (folder = \"Update\", skipvalidation = \"true\") Update_RawWays() {" +
+                @$"{job.Config.Kusto.RawWaysTable}
+                | extend centroid = geo_line_centroid(geojson), length = geo_line_length(geojson), simplified = geo_line_simplify(geojson, 1000)
+                | extend longitude = todouble(centroid.coordinates[0]), latitude = todouble(centroid.coordinates[1])
+                | extend
+                    centroid_h3_low = geo_point_to_h3cell(longitude, latitude, 2), //158 km
+                    centroid_h3_mid = geo_point_to_h3cell(longitude, latitude, 5), //8 km
+                    centroid_h3_high = geo_point_to_h3cell(longitude, latitude, 9), //174 m
+                    centroid_s2_low = geo_point_to_s2cell(longitude, latitude, 6), //108 km	- 156 km
+                    centroid_s2_mid = geo_point_to_s2cell(longitude, latitude, 10), //7 km - 10 km
+                    centroid_s2_high = geo_point_to_s2cell(longitude, latitude, 16), //106 m - 153 m
+                    centroid_geohash_low = geo_point_to_geohash(longitude, latitude, 3), //108 km	- 156 km
+                    centroid_geohash_mid = geo_point_to_geohash(longitude, latitude, 5), //7 km - 10 km
+                    centroid_geohash_high = geo_point_to_geohash(longitude, latitude, 7) //106 m - 153 m
+                | mv-apply point = geojson.coordinates on
+                (
+                    extend h3 = geo_point_to_h3cell(todouble(point[0]), todouble(point[1]), 9)
+                    | summarize covering_h3 = make_set(h3)
+                    | mv-expand covering_h3 to typeof(string)
+                )" +
+                "}";
+            job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
+
+            command =
+            CslCommandGenerator.GenerateTableCreateCommand(
+                job.Config.Kusto.WaysTable,
+                new[]
+                {
+            Tuple.Create("osmId", "System.Int64"),
+            Tuple.Create("ts", "System.DateTime"),
+            Tuple.Create("osmTags", "System.Object"),
+            Tuple.Create("userId", "System.Int64"),
+            Tuple.Create("userName", "System.String"),
+            Tuple.Create("osmVersion", "System.Int32"),
+            Tuple.Create("geojson", "System.Object"),
+            Tuple.Create("wkt", "System.String"),
+            Tuple.Create("nodesOrMember", "System.Object"),
+            Tuple.Create("pbf", "System.String"),
+            Tuple.Create("centroid", "System.Object"),
+            Tuple.Create("length", "System.Double"),
+            Tuple.Create("simplified", "System.Object"),
+            Tuple.Create("longitude", "System.Double"),
+            Tuple.Create("latitude", "System.Double"),
+            Tuple.Create("centroid_h3_low", "System.String"),
+            Tuple.Create("centroid_h3_mid", "System.String"),
+            Tuple.Create("centroid_h3_high", "System.String"),
+            Tuple.Create("centroid_s2_low", "System.String"),
+            Tuple.Create("centroid_s2_mid", "System.String"),
+            Tuple.Create("centroid_s2_high", "System.String"),
+            Tuple.Create("centroid_geohash_low", "System.String"),
+            Tuple.Create("centroid_geohash_mid", "System.String"),
+            Tuple.Create("centroid_geohash_high", "System.String"),
+            Tuple.Create("covering_h3", "System.String")
+                });
+            job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
+
+            command = $".alter table {job.Config.Kusto.WaysTable} policy update @'[" + "{" + $"\"IsEnabled\": true, \"Source\": \"{job.Config.Kusto.RawWaysTable}\", \"Query\": \"Update_RawWays\", \"IsTransactional\": true, \"PropagateIngestionProperties\": false" + "}]'";
+            job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
 
             var taskFileName = Path.GetRandomFileName();
 
@@ -103,7 +159,7 @@ namespace OsmToKusto.Tasks
 
             tokenSource.Cancel();
 
-            Task.WaitAll(threads.ToArray());
+            //Task.WaitAll(threads.ToArray());
         }
 
         private void CreateTasks(OSMJob job, string taskFileName)
