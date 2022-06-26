@@ -2,36 +2,26 @@
 using Kusto.Data.Common;
 using Kusto.Data.Ingestion;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using OsmSharp;
 using OsmSharp.Geo;
 using OsmSharp.Streams;
 using OsmToKusto.Ingestion;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace OsmToKusto.Tasks
 {
-    public class Ways
+    public class WaysImpl : AComplexGeo
     {
-        private readonly ILogger _logger;
-        private readonly IngestionManager _iManager;
-        static private int _ongoingProcessing = 0;
-        private ConcurrentQueue<ComplexGeoTask> _workpackages = new ConcurrentQueue<ComplexGeoTask>();
-
-        public Ways(ILoggerFactory loggerFactory, IngestionManager iManager)
+        public WaysImpl(ILoggerFactory loggerFactory, IngestionManager iManager) : base(iManager)
         {
-            _logger = loggerFactory.CreateLogger<Ways>();
-            _iManager = iManager;
+            _logger = loggerFactory.CreateLogger<WaysImpl>();
         }
 
-        public void IngestAllWays(OSMJob job)
+        protected override void CreateSchema(OSMJob job)
         {
             var command =
             CslCommandGenerator.GenerateTableCreateCommand(
@@ -128,139 +118,21 @@ namespace OsmToKusto.Tasks
 
             command = $".alter table {job.Config.Kusto.WaysTable} policy update @'[" + "{" + $"\"IsEnabled\": true, \"Source\": \"{job.Config.Kusto.RawWaysTable}\", \"Query\": \"Update_RawWays\", \"IsTransactional\": true, \"PropagateIngestionProperties\": false" + "}]'";
             job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
-
-            var taskFileName = Path.GetRandomFileName();
-
-            var pbfFileNames = CreateCopies(job.Config.PbfFilePath, job.Config.ComplexGeoTask, job.Config.TempDirectory);
-
-            CreateTasks(job, taskFileName);
-
-            var threads = new List<Task>();
-
-            var tokenSource = new CancellationTokenSource();
-            CancellationToken ct = tokenSource.Token;
-
-            TaskFactory tf = new TaskFactory(ct, TaskCreationOptions.LongRunning, TaskContinuationOptions.None, TaskScheduler.Default);
-
-            for (int i = 0; i < job.Config.ComplexGeoTask; i++)
-            {
-                var tempI = i;
-                threads.Add(tf.StartNew(() => StartWorker(pbfFileNames[tempI], ct)));
-            }
-
-            while (_workpackages.Count > 0 || _ongoingProcessing > 0)
-            {
-                _logger.LogInformation($"Complex process queue: {_workpackages.Count}, Ongoing processes : {Volatile.Read(ref _ongoingProcessing)}");
-
-                Thread.Sleep(60000);
-            }
-
-            _logger.LogInformation("DONE processing");
-
-            tokenSource.Cancel();
-
-            //Task.WaitAll(threads.ToArray());
         }
 
-        private void CreateTasks(OSMJob job, string taskFileName)
+        protected override void CreateTasks(OSMJob job, string taskFileName)
         {
-            int count = 0;
-            using (var fileStream = File.OpenRead(job.Config.PbfFilePath))
-            {
-                List<Way> ways = new List<Way>();
-
-                // create source stream.
-                var source = new PBFOsmStreamSource(fileStream);
-
-                ways = source
-                    .Where(_ => _.Type == OsmSharp.OsmGeoType.Way)
-                    .Select(__ => (Way)__)
-                    .ToList();
-
-                int lastWorkPackage = 0;
-
-                using (StreamWriter taskFileStream = new(taskFileName))
-                {
-                    foreach (var aWay in ways)
-                    {
-                        count++;
-
-                        var waysNodes = aWay.Nodes != null ? aWay.Nodes.ToHashSet() : new HashSet<long>();
-                        if (aWay.Id.HasValue)
-                        {
-                            waysNodes.Add(aWay.Id.Value);
-                        }
-
-                        if (count % job.Config.ComplexGeoBatchSize == 0)
-                        {
-                            var complexGeoTask = new ComplexGeoTask() { Skip = count - job.Config.ComplexGeoBatchSize, Take = job.Config.ComplexGeoBatchSize, TaskFileName = taskFileName, osmJob = job };
-                            _workpackages.Enqueue(complexGeoTask);
-
-                            lastWorkPackage = count;
-                        }
-
-                        taskFileStream.WriteLine(String.Join(Helper.csvSeparator, waysNodes));
-                    }
-                }
-
-                _workpackages.Enqueue(new ComplexGeoTask() { Skip = lastWorkPackage, Take = count - lastWorkPackage, TaskFileName = taskFileName, osmJob = job });
-            }
+            CreateTasks_protected<Way>(job, taskFileName);
         }
 
-        private void StartWorker(string pbfFile, CancellationToken ct)
+        protected override HashSet<long> GetInterestingNodes<T>(T myWay)
         {
-            _logger.LogInformation($"Started a task responsible for file {pbfFile}");
+            Way way = myWay as Way;
 
-            if (ct.IsCancellationRequested)
-            {
-                return;
-            }
-
-            ComplexGeoTask complexTask;
-            while (true)
-            {
-                while (_workpackages.TryDequeue(out complexTask))
-                {
-                    if (ct.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
-                    _logger.LogInformation($"Dequeued a task on {pbfFile} (skip: {complexTask.Skip}, take: {complexTask.Take})");
-
-                    Interlocked.Increment(ref _ongoingProcessing);
-                    try
-                    {
-                        ProcessTask(complexTask, pbfFile);
-                    }
-                    finally
-                    {
-                        Interlocked.Decrement(ref _ongoingProcessing);
-                    }
-                }
-
-                Thread.Sleep(10000);
-            }
+            return way.Nodes != null ? way.Nodes.ToHashSet() : new HashSet<long>();
         }
 
-        private List<string> CreateCopies(string pbfFilePath, int complexGeoTask, string tempDirectory)
-        {
-            List<String> copies = new List<String>();
-
-            for (int i = 0; i < complexGeoTask; i++)
-            {
-                var taskFileName = Path.GetRandomFileName();
-                var fileIncludingPath = Path.Combine(tempDirectory, taskFileName);
-
-                File.Copy(pbfFilePath, fileIncludingPath, true);
-
-                copies.Add(fileIncludingPath);
-            }
-
-            return copies;
-        }
-
-        private void ProcessTask(ComplexGeoTask complexTask, string pbfFile)
+        protected override void ProcessTask(ComplexGeoTask complexTask, string pbfFile)
         {
             var fileName = Path.GetFileName(complexTask.osmJob.Config.PbfFilePath);
 

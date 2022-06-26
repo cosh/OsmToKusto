@@ -116,11 +116,11 @@ static Task CreateAllGeosTask(ILoggerFactory loggerFactory, IngestionManager iMa
 
 static Task CreateWaysTask(ILoggerFactory loggerFactory, IngestionManager iManager, OSMJob job)
 {
-    Ways ways = new Ways(loggerFactory, iManager);
+    IComplexGeo ways = new WaysImpl(loggerFactory, iManager);
 
     Action waysAction = () =>
     {
-        ways.IngestAllWays(job);
+        ways.IngestAllComplexGeometries(job);
     };
 
     var waysTask = Task.Run(waysAction);
