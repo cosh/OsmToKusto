@@ -78,18 +78,18 @@ namespace OsmToKusto.Tasks
 
         protected abstract void CreateSchema(OSMJob job);
 
-        protected void CreateTasks_protected<T>(OSMJob job, string taskFileName) where T: OsmGeo
+        protected void CreateTasks_protected<T>(OSMJob job, string taskFileName, OsmSharp.OsmGeoType geoType) where T: OsmGeo
         {
             int count = 0;
             using (var fileStream = File.OpenRead(job.Config.PbfFilePath))
             {
-                List<T> ways = new List<T>();
+                List<T> compexGeos = new List<T>();
 
                 // create source stream.
                 var source = new PBFOsmStreamSource(fileStream);
 
-                ways = source
-                    .Where(_ => _.Type == OsmSharp.OsmGeoType.Way)
+                compexGeos = source
+                    .Where(_ => _.Type == geoType)
                     .Select(__ => (T)__)
                     .ToList();
 
@@ -97,15 +97,15 @@ namespace OsmToKusto.Tasks
 
                 using (StreamWriter taskFileStream = new(taskFileName))
                 {
-                    foreach (var aWay in ways)
+                    foreach (var aComplexGeo in compexGeos)
                     {
                         count++;
 
-                        HashSet<long>  interestingNodes = GetInterestingNodes(aWay);
+                        HashSet<long>  interestingNodes = GetInterestingNodes(aComplexGeo);
 
-                        if (aWay.Id.HasValue)
+                        if (aComplexGeo.Id.HasValue)
                         {
-                            interestingNodes.Add(aWay.Id.Value);
+                            interestingNodes.Add(aComplexGeo.Id.Value);
                         }
 
                         if (count % job.Config.ComplexGeoBatchSize == 0)

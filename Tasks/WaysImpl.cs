@@ -122,7 +122,7 @@ namespace OsmToKusto.Tasks
 
         protected override void CreateTasks(OSMJob job, string taskFileName)
         {
-            CreateTasks_protected<Way>(job, taskFileName);
+            CreateTasks_protected<Way>(job, taskFileName, OsmGeoType.Way);
         }
 
         protected override HashSet<long> GetInterestingNodes<T>(T myWay)
