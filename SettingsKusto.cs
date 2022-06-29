@@ -24,7 +24,7 @@ namespace OsmToKusto
         public string RawWaysTable { get; set; } = "rawWays";
         public string RawWaysMappingName { get; set; } = "map";
         public string WaysTable { get; set; } = "ways";
-        public string AllGeometriesTable { get; set; } = "allGeometries";
+        public string NodesTable { get; set; } = "nodes";
 
         public string RawRelationsTable { get; set; } = "rawRelations";
         public string RawRelationsMappingName { get; set; } = "map";

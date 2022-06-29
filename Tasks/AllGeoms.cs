@@ -85,7 +85,7 @@ namespace OsmToKusto.Tasks
 
             command =
             CslCommandGenerator.GenerateTableCreateCommand(
-                job.Config.Kusto.AllGeometriesTable,
+                job.Config.Kusto.NodesTable,
                 new[]
                 {
             Tuple.Create("osmId", "System.Int64"),
@@ -111,7 +111,7 @@ namespace OsmToKusto.Tasks
                 });
             job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
 
-            command = $".alter table {job.Config.Kusto.AllGeometriesTable} policy update @'[" + "{" + $"\"IsEnabled\": true, \"Source\": \"{job.Config.Kusto.RawAllGeometriesTable}\", \"Query\": \"Update_RawGeometries\", \"IsTransactional\": true, \"PropagateIngestionProperties\": false" + "}]'";
+            command = $".alter table {job.Config.Kusto.NodesTable} policy update @'[" + "{" + $"\"IsEnabled\": true, \"Source\": \"{job.Config.Kusto.RawAllGeometriesTable}\", \"Query\": \"Update_RawGeometries\", \"IsTransactional\": true, \"PropagateIngestionProperties\": false" + "}]'";
             job.CommandClient.ExecuteControlCommand(job.Config.Kusto.DatabaseName, command);
 
             long count = 0;
@@ -140,29 +140,29 @@ namespace OsmToKusto.Tasks
                     switch (aOSMItem.Type)
                     {
                         case OsmGeoType.Node:
+                            geoType = "Node";
                             var node = aOSMItem as Node;
                             if (node != null)
                             {
-                                geoType = "Node";
                                 latitude = node.Latitude.HasValue ? Helper.CreateStringFromLong(node.Latitude.Value) : string.Empty;
                                 longitude = node.Longitude.HasValue ? Helper.CreateStringFromLong(node.Longitude.Value) : String.Empty;
                             }
                             break;
 
                         case OsmGeoType.Way:
+                            geoType = "Way";
                             var way = aOSMItem as Way;
                             if (way != null)
                             {
-                                geoType = "Way";
                                 nodesOrMember = Helper.GetNodesArray(way.Nodes);
                             }
                             break;
 
                         case OsmGeoType.Relation:
+                            geoType = "Relation";
                             var relation = aOSMItem as Relation;
                             if (relation != null)
                             {
-                                geoType = "Relation";
                                 nodesOrMember = Helper.GetMembersArray(relation.Members);
                             }
                             break;
