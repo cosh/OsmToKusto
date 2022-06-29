@@ -28,5 +28,11 @@ namespace OsmToKusto
 
         public string RawRelationsTable { get; set; } = "rawRelations";
         public string RawRelationsMappingName { get; set; } = "map";
+
+        public string SPAppId { get; set; }
+
+        public string SPClientSecret { get; set; }
+
+        public string SPTenantId { get; set; }
     }
 }

@@ -44,13 +44,23 @@ var loggerFactory = LoggerFactory.Create(builder =>
 ILogger logger = loggerFactory.CreateLogger<Program>();
 
 var ingestUri = $"https://ingest-{settings.Kusto.ClusterName}.{settings.Kusto.ClusterRegion}.kusto.windows.net";
-var ingestConnectionStringBuilder = new KustoConnectionStringBuilder(ingestUri).WithAadUserPromptAuthentication(userId: settings.Kusto.UserId);
-
 var commandAndQueryURL = $"https://{settings.Kusto.ClusterName}.{settings.Kusto.ClusterRegion}.kusto.windows.net";
-var commandAndQueryConnectionStringBuilder = new KustoConnectionStringBuilder(commandAndQueryURL).WithAadUserPromptAuthentication(userId: settings.Kusto.UserId);
 
-var ingestClient = KustoIngestFactory.CreateQueuedIngestClient(ingestConnectionStringBuilder);
-var kustoClient = KustoClientFactory.CreateCslAdminProvider(commandAndQueryConnectionStringBuilder);
+KustoConnectionStringBuilder ingestConnectionString;
+KustoConnectionStringBuilder commandsConnectionString;
+if (settings.Kusto.SPAppId == null)
+{
+    ingestConnectionString = new KustoConnectionStringBuilder(ingestUri).WithAadUserPromptAuthentication(userId: settings.Kusto.UserId);
+    commandsConnectionString = new KustoConnectionStringBuilder(commandAndQueryURL).WithAadUserPromptAuthentication(userId: settings.Kusto.UserId);
+}
+else
+{
+    ingestConnectionString = new KustoConnectionStringBuilder(ingestUri).WithAadApplicationKeyAuthentication(settings.Kusto.SPAppId, settings.Kusto.SPClientSecret, settings.Kusto.SPTenantId);
+    commandsConnectionString = new KustoConnectionStringBuilder(commandAndQueryURL).WithAadApplicationKeyAuthentication(settings.Kusto.SPAppId, settings.Kusto.SPClientSecret, settings.Kusto.SPTenantId);
+}
+
+var ingestClient = KustoIngestFactory.CreateQueuedIngestClient(ingestConnectionString);
+var kustoClient = KustoClientFactory.CreateCslAdminProvider(commandsConnectionString);
 
 IngestionManager iManager = new IngestionManager(ingestClient, settings, loggerFactory);
 
