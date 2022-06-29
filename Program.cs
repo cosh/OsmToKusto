@@ -64,6 +64,10 @@ tasks.Add(allGeosTask);
 Task waysTask = CreateWaysTask(loggerFactory, iManager, job);
 tasks.Add(waysTask);
 
+//extracting relations is not ready yet
+//Task relationsTask = CreateRelationsTask(loggerFactory, iManager, job);
+//tasks.Add(relationsTask);
+
 Task.WaitAll(tasks.ToArray());
 
 while (iManager.GetQueueCount() > 0 || iManager.GetOngoingIngestions() > 0)
@@ -117,6 +121,19 @@ static Task CreateAllGeosTask(ILoggerFactory loggerFactory, IngestionManager iMa
 static Task CreateWaysTask(ILoggerFactory loggerFactory, IngestionManager iManager, OSMJob job)
 {
     IComplexGeo ways = new WaysImpl(loggerFactory, iManager);
+
+    Action waysAction = () =>
+    {
+        ways.IngestAllComplexGeometries(job);
+    };
+
+    var waysTask = Task.Run(waysAction);
+    return waysTask;
+}
+
+static Task CreateRelationsTask(ILoggerFactory loggerFactory, IngestionManager iManager, OSMJob job)
+{
+    IComplexGeo ways = new RelationsImpl(loggerFactory, iManager);
 
     Action waysAction = () =>
     {
