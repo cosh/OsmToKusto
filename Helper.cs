@@ -50,7 +50,7 @@ namespace OsmToKusto
             return String.Empty;
         }
 
-        public static void IngestToKusto(string databaseName, string table,
+        public async static Task IngestToKusto(string databaseName, string table,
             StringBuilder sb, String mappingName, IngestionManager iManager)
         {
             var job = new IngestionJob();
@@ -59,7 +59,11 @@ namespace OsmToKusto
             job.DatabaseName = databaseName;
 
             string tempFile = Path.GetRandomFileName();
-            File.WriteAllText(tempFile, sb.ToString());
+
+            using (StreamWriter outputFile = new StreamWriter(tempFile))
+            {
+                await outputFile.WriteAsync(sb.ToString());
+            }
 
             job.ToBeIngested = tempFile;
 

@@ -83,15 +83,12 @@ namespace OsmToKusto.Tasks
             int count = 0;
             using (var fileStream = File.OpenRead(job.Config.PbfFilePath))
             {
-                List<T> compexGeos = new List<T>();
-
                 // create source stream.
                 var source = new PBFOsmStreamSource(fileStream);
 
-                compexGeos = source
+                var compexGeos = source
                     .Where(_ => _.Type == geoType)
-                    .Select(__ => (T)__)
-                    .ToList();
+                    .Select(__ => (T)__);
 
                 int lastWorkPackage = 0;
 

@@ -175,12 +175,12 @@ namespace OsmToKusto.Tasks
                     {
                         _logger.LogInformation($"About to ingest {job.Config.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}. Queue count: {_iManager.GetQueueCount()}. Concurrent ingestions: {_iManager.GetOngoingIngestions()}");
 
-                        Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawAllGeometriesTable, sb,
+                        Task asyncTask = Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawAllGeometriesTable, sb,
                             job.Config.Kusto.RawGeometriesMappingName, _iManager);
 
                         ingestions++;
 
-                        sb.Clear();
+                        sb = new StringBuilder(sb.Capacity);
                     }
 
                     var newRow = $"{Helper.CleanString(osmId, Helper.csvSeparator)}{Helper.csvSeparator}" +

@@ -68,15 +68,24 @@ var tasks = new List<Task>();
 
 OSMJob job = new OSMJob() { CommandClient = kustoClient, IngestClient = ingestClient, Config = settings};
 
-Task allGeosTask = CreateAllGeosTask(loggerFactory, iManager, job);
-tasks.Add(allGeosTask);
+if (settings.ProcessNodes)
+{
+    Task allGeosTask = CreateAllGeosTask(loggerFactory, iManager, job);
+    tasks.Add(allGeosTask);
+}
 
-Task waysTask = CreateWaysTask(loggerFactory, iManager, job);
-tasks.Add(waysTask);
+if (settings.ProcessWays)
+{
+    Task waysTask = CreateWaysTask(loggerFactory, iManager, job);
+    tasks.Add(waysTask);
+}
 
 //extracting relations is not ready yet
-//Task relationsTask = CreateRelationsTask(loggerFactory, iManager, job);
-//tasks.Add(relationsTask);
+if (settings.ProcessRelations)
+{
+    //Task relationsTask = CreateRelationsTask(loggerFactory, iManager, job);
+    //tasks.Add(relationsTask);
+}
 
 Task.WaitAll(tasks.ToArray());
 
