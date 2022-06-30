@@ -202,7 +202,7 @@ namespace OsmToKusto.Tasks
             }
 
             _logger.LogInformation($"About to ingest the last batch. Current row count: {count}");
-            Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawAllGeometriesTable, sb,
+            Task asyncTaskLastBatch = Helper.IngestToKusto(job.Config.Kusto.DatabaseName, job.Config.Kusto.RawAllGeometriesTable, sb,
                     job.Config.Kusto.RawGeometriesMappingName, _iManager);
 
             _logger.LogInformation("DONE ingesting OSM geos");

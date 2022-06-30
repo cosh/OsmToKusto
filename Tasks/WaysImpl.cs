@@ -2,6 +2,7 @@
 using Kusto.Data.Common;
 using Kusto.Data.Ingestion;
 using Microsoft.Extensions.Logging;
+using NetTopologySuite.Features;
 using OsmSharp;
 using OsmSharp.Geo;
 using OsmSharp.Streams;
@@ -153,21 +154,36 @@ namespace OsmToKusto.Tasks
                     .Where(_ => nodes.Contains(_.Id.Value)).ToList();
 
                 var features = filtered.ToFeatureSource()
-                    .Where(_ => _.Geometry is NetTopologySuite.Geometries.LineString && _.Attributes.Exists("id"))
-                    .ToDictionary(_ => _.Attributes["id"]);
+                    .Where(_ => _.Geometry is NetTopologySuite.Geometries.LineString && _.Attributes.Exists("id"));
+
+                var featuresDict = new Dictionary<long, IFeature>();
+                foreach (var aFeater in features)
+                {
+                    long id = long.Parse(aFeater.Attributes["id"].ToString());
+
+                    featuresDict.TryAdd(id, aFeater);
+                }
 
                 var complete = filtered
-                    .Where(_ => _.Type == OsmGeoType.Way && _.Id.HasValue)
-                    .ToDictionary(_ => _.Id.Value);
+                    .Where(_ => _.Type == OsmGeoType.Way && _.Id.HasValue);
+
+                var completeDict = new Dictionary<long, OsmGeo>();
+                foreach (var aGeo in complete)
+                {
+                    long id = aGeo.Id.Value;
+
+                    completeDict.TryAdd(id, aGeo);
+                }
+
 
                 long count = 0;
                 long ingestions = 0;
                 StringBuilder sb = new StringBuilder();
 
-                foreach (var aWay in complete)
+                foreach (var aWay in completeDict)
                 {
                     NetTopologySuite.Features.IFeature feature;
-                    if (features.TryGetValue(aWay.Key, out feature))
+                    if (featuresDict.TryGetValue(aWay.Key, out feature))
                     {
                         var ls = feature.Geometry as NetTopologySuite.Geometries.LineString;
                         var wkt = ls.ToText();
@@ -193,7 +209,7 @@ namespace OsmToKusto.Tasks
                                 {
                                     _logger.LogInformation($"About to ingest {complexTask.osmJob.Config.NumberOfRecordsPerFile} rows. Current row count: {count}. Ingestion batch: {ingestions}. Queue count: {_iManager.GetQueueCount()}. Concurrent ingestions: {_iManager.GetOngoingIngestions()}");
 
-                                    Helper.IngestToKusto(complexTask.osmJob.Config.Kusto.DatabaseName, complexTask.osmJob.Config.Kusto.RawWaysTable, sb,
+                                    Task asyncTask = Helper.IngestToKusto(complexTask.osmJob.Config.Kusto.DatabaseName, complexTask.osmJob.Config.Kusto.RawWaysTable, sb,
                                         complexTask.osmJob.Config.Kusto.RawWaysMappingName, _iManager);
 
                                     ingestions++;
@@ -229,7 +245,7 @@ namespace OsmToKusto.Tasks
                 }
 
                 _logger.LogInformation($"About to ingest the last batch. Current row count: {count}");
-                Helper.IngestToKusto(complexTask.osmJob.Config.Kusto.DatabaseName, complexTask.osmJob.Config.Kusto.RawWaysTable, sb,
+                Task asyncTaskLastBatch = Helper.IngestToKusto(complexTask.osmJob.Config.Kusto.DatabaseName, complexTask.osmJob.Config.Kusto.RawWaysTable, sb,
                                         complexTask.osmJob.Config.Kusto.RawWaysMappingName, _iManager);
 
                 _logger.LogInformation("DONE ingesting OSM ways");
