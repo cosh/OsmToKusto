@@ -22,11 +22,11 @@ namespace OsmToKusto
 
         public bool DryRun { get; set; } = false;
 
-        public bool ProcessWays { get; set; } = true;
+        public bool ProcessWays { get; set; }
 
-        public bool ProcessRelations { get; set; } = true;
+        public bool ProcessRelations { get; set; }
 
-        public bool ProcessNodes { get; set; } = true;
+        public bool ProcessNodes { get; set; }
 
         public SettingsKusto Kusto { get; set; }
     }

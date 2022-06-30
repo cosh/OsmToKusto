@@ -70,12 +70,14 @@ OSMJob job = new OSMJob() { CommandClient = kustoClient, IngestClient = ingestCl
 
 if (settings.ProcessNodes)
 {
+    logger.LogInformation($"PROCESSING ALL NODES");
     Task allGeosTask = CreateAllGeosTask(loggerFactory, iManager, job);
     tasks.Add(allGeosTask);
 }
 
 if (settings.ProcessWays)
 {
+    logger.LogInformation($"PROCESSING ALL WAYS");
     Task waysTask = CreateWaysTask(loggerFactory, iManager, job);
     tasks.Add(waysTask);
 }
@@ -83,6 +85,7 @@ if (settings.ProcessWays)
 //extracting relations is not ready yet
 if (settings.ProcessRelations)
 {
+    logger.LogInformation($"PROCESSING ALL RELATIONS");
     //Task relationsTask = CreateRelationsTask(loggerFactory, iManager, job);
     //tasks.Add(relationsTask);
 }
